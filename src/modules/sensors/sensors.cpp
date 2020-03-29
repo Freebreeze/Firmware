@@ -395,6 +395,7 @@ Sensors::parameter_update_poll(bool forced)
 		int fd = px4_open(AIRSPEED0_DEVICE_PATH, 0);
 
 		/* this sensor is optional, abort without error */
+        // 此传感器是可选的，无误中止
 		if (fd >= 0) {
 			struct airspeed_scale airscale = {
 				_parameters.diff_pres_offset_pa,
@@ -596,6 +597,7 @@ Sensors::run()
 	_voted_sensors_update.init(raw);
 
 	/* (re)load params and calibration */
+    // 加载参数和校准
 	parameter_update_poll(true);
 
 	/*

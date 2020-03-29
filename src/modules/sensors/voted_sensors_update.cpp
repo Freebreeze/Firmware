@@ -91,6 +91,7 @@ VotedSensorsUpdate::VotedSensorsUpdate(const Parameters &parameters, bool hil_en
 
 int VotedSensorsUpdate::init(sensor_combined_s &raw)
 {
+    // RELATIVE_TIMESTAMP_INVALID:如果其中一个相对时间戳设置为此值，则表示关联的传感器值无效
 	raw.accelerometer_timestamp_relative = sensor_combined_s::RELATIVE_TIMESTAMP_INVALID;
 	raw.timestamp = 0;
 
@@ -566,7 +567,14 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 				 * data required is performed in the sensor driver, preferably before downsampling.
 				*/
 
+                /*
+                 * 最好在下采样前使用已集成在驱动程序中的数据，因为这样可以减少混叠错误。
+                 * 校正原始传感器数据中因温度变化引起的比例因子误差和偏移。
+                 * 假设所需输入数据的任何滤波是在传感器驱动器中执行的，最好是在下采样之前。
+                 */
+
 				// convert the delta velocities to an equivalent acceleration before application of corrections
+                // 在应用修正之前，将δ速度转换为等效加速度
 				float dt_inv = 1.e6f / accel_report.integral_dt;
 				accel_data = matrix::Vector3f(accel_report.x_integral * dt_inv,
 							      accel_report.y_integral * dt_inv,
@@ -576,12 +584,14 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 
 			} else {
 				// using the value instead of the integral (the integral is the prefered choice)
+                // 使用值而不是积分（首选积分）
 
 				// Correct each sensor for temperature effects
 				// Filtering and/or downsampling of temperature should be performed in the driver layer
 				accel_data = matrix::Vector3f(accel_report.x, accel_report.y, accel_report.z);
 
 				// handle the cse where this is our first output
+                // 将上次数据获得时间设置为一秒之前
 				if (_last_accel_timestamp[uorb_index] == 0) {
 					_last_accel_timestamp[uorb_index] = accel_report.timestamp - 1000;
 				}
@@ -592,6 +602,7 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 			}
 
 			// handle temperature compensation
+            // 处理温度补偿
 			if (_temperature_compensation.apply_corrections_accel(uorb_index, accel_data, accel_report.temperature,
 					offsets[uorb_index], scales[uorb_index]) == 2) {
 				_corrections_changed = true;
@@ -965,6 +976,7 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 	return false;
 }
 
+// 初始化传感器组，因为每一类传感器会有很多个，并对传感器编号
 void VotedSensorsUpdate::init_sensor_class(const struct orb_metadata *meta, SensorData &sensor_data,
 		uint8_t sensor_count_max)
 {
@@ -989,7 +1001,8 @@ void VotedSensorsUpdate::init_sensor_class(const struct orb_metadata *meta, Sens
 		}
 	}
 
-	// never decrease the sensor count, as we could end up with mismatching validators
+    // never decrease the sensor count, as we could end up with mismatching validators
+    // 永远不要减少传感器的数量，因为我们最终可能会使用不匹配的验证器
 	if (max_sensor_index + 1 > sensor_data.subscription_count) {
 		sensor_data.subscription_count = max_sensor_index + 1;
 	}
